@@ -12,3 +12,4 @@
 **/.idea
 **/.vscode
 **/.egg-info
+**/data/**
