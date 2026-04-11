@@ -10,6 +10,7 @@ from indexing import cosine_faiss_index, retrieve, save_index
 from ollama_client import ollama_chat, ollama_embed
 from schemas import AutocompleteRequest, ChatRequest
 import state
+import hashlib
 
 router = APIRouter()
 
@@ -57,6 +58,10 @@ async def upload_pdf(file: UploadFile = File(...)):
     state.embedding_dim = vectors.shape[1]
     state.faiss_index = cosine_faiss_index(vectors)
     state.chunks = all_chunks
+
+    #calculate and save sha256 hash of the file contents
+    file_hash = hashlib.sha256(pdf_bytes).hexdigest()
+    state.file_hash = file_hash
     save_index()
 
     return {"ok": True, "chunks": len(state.chunks), "file": file.filename}
@@ -64,7 +69,7 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 @router.post("/chat")
 def chat(req: ChatRequest):
-    cache_key = f"answer:{stable_key(req.query)}"
+    cache_key = f"answer:{stable_key(req.query)}:{state.file_hash}"
     cached = redis_client.get(cache_key)
     if cached:
         return {"answer": cached, "cached": True, "context": []}
@@ -96,7 +101,7 @@ def chat(req: ChatRequest):
 
 @router.post("/autocomplete")
 def autocomplete(req: AutocompleteRequest):
-    cache_key = f"ac:{stable_key(req.prefix)}"
+    cache_key = f"ac:{stable_key(req.prefix)}:{state.file_hash}"
     cached = redis_client.get(cache_key)
     if cached:
         return {"suggestions": json.loads(cached), "cached": True}
