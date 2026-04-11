@@ -79,7 +79,7 @@ def chat(req: ChatRequest):
             "role": "system",
             "content": (
                 "Answer only from the provided document context. "
-                "If the context is insufficient, say you do not know. "
+                "If the context is insufficient, you should not answer. "
                 "Cite page numbers in the answer."
             ),
         },
@@ -110,9 +110,9 @@ def autocomplete(req: AutocompleteRequest):
         {
             "role": "system",
             "content": (
-                "Return exactly 3 short autocomplete suggestions. "
+                "Return exactly 3 autocomplete suggestions. "
                 "Each suggestion must be grounded in the document context, "
-                "must be short, and must not add facts not present in the context. "
+                "must not add facts not present in the context. "
                 "Return plain text, one suggestion per line."
             ),
         },

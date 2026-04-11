@@ -1,0 +1,20 @@
+{"prefix": "What is the refund", "expected_suggestions": ["What is the refund policy?", "What is the refund window?", "What is the refund eligibility?"]}
+{"prefix": "How do I request a", "expected_suggestions": ["How do I request a refund?", "How do I request a reimbursement?", "How do I request a refund through the support portal?"]}
+{"prefix": "Are digital downl", "expected_suggestions": ["Are digital downloads refundable?", "Are digital downloads eligible for refunds?", "Are digital downloads non-refundable?"]}
+{"prefix": "What are the eli", "expected_suggestions": ["What are the eligibility criteria?", "What are the refund eligibility requirements?", "What are the product eligibility rules?"]}
+{"prefix": "How long does a re", "expected_suggestions": ["How long does a refund take to process?", "How long does a reimbursement take?", "How long does approval take after a refund request?"]}
+{"prefix": "What happens afte", "expected_suggestions": ["What happens after 30 days?", "What happens after the refund window closes?", "What happens after a refund request is approved?"]}
+{"prefix": "Which items are n", "expected_suggestions": ["Which items are non-refundable?", "Which items are not eligible for refunds?", "Which items are final sale?"]}
+{"prefix": "Where should cust", "expected_suggestions": ["Where should customers submit a refund request?", "Where should customers request a reimbursement?", "Where should customers use the support portal?"]}
+{"prefix": "What payment meth", "expected_suggestions": ["What payment method is used for reimbursements?", "What payment method receives the refund?", "What payment method is the original payment method?"]}
+{"prefix": "When are refunds ", "expected_suggestions": ["When are refunds issued to the original payment method?", "When are refunds processed after approval?", "When are reimbursements processed?"]}
+{"prefix": "Tell me about pr", "expected_suggestions": ["Tell me about the reimbursement process.", "Tell me about the refund process.", "Tell me about the support portal process."]}
+{"prefix": "What are the exc", "expected_suggestions": ["What are the exceptions to the refund policy?", "What are the exception cases?", "What are the final sale exceptions?"]}
+{"prefix": "Can bulk orders b", "expected_suggestions": ["Can bulk orders have separate refund terms?", "Can bulk orders be refunded under separate terms?", "Can bulk orders follow different refund rules?"]}
+{"prefix": "Who is eligible f", "expected_suggestions": ["Who is eligible for a refund?", "Who is eligible for reimbursement?", "Who is eligible under the refund policy?"]}
+{"prefix": "What should a cus", "expected_suggestions": ["What should a customer include in a refund request?", "What should a customer submit with a refund request?", "What should a customer provide to request a refund?"]}
+{"prefix": "When is customer ", "expected_suggestions": ["When is customer support available?", "When is customer support open?", "When is customer support available Monday to Friday?"]}
+{"prefix": "How can I contact", "expected_suggestions": ["How can I contact support?", "How can I contact support@acmecorp.com?", "How can I contact customer support?"]}
+{"prefix": "What about items d", "expected_suggestions": ["What about items damaged due to misuse?", "What about items damaged by misuse?", "What about damaged items and refunds?"]}
+{"prefix": "Where are refund ", "expected_suggestions": ["Where are refund requests submitted?", "Where are refund requests sent?", "Where are reimbursement requests submitted?"]}
+{"prefix": "Does the policy c", "expected_suggestions": ["Does the policy cover products purchased directly from Acme Corp?", "Does the policy cover unused items?", "Does the policy cover digital downloads?"]}
