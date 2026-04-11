@@ -111,9 +111,9 @@ def autocomplete(req: AutocompleteRequest):
             "role": "system",
             "content": (
                 "Return exactly 3 autocomplete suggestions. "
-                "Each suggestion must be grounded in the document context, "
-                "must not add facts not present in the context. "
-                "Return plain text, one suggestion per line."
+                "Each suggestion must strictly be grounded in the document context."
+                "Each suggestion must strictly include the prefix."
+                "Each suggestion must strictly be a single sentence."
             ),
         },
         {
