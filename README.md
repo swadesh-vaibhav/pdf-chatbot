@@ -42,9 +42,10 @@ User → Frontend → Backend → Redis → Vector DB → LLM
 ├── eval/
 │   ├── metrics.py
 │   ├── run_eval.py
-│   ├── qa_dataset.jsonl
-│   ├── autocomplete_dataset.jsonl
-│   └── sample_policy.pdf
+│   ├── data/
+│       ├── qa_dataset.jsonl
+│       ├── autocomplete_dataset.jsonl
+│       ├── sample_policy.pdf
 ```
 
 ---
