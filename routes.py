@@ -119,6 +119,7 @@ def autocomplete(req: AutocompleteRequest):
                 "Each suggestion must strictly be grounded in the document context."
                 "Each suggestion must strictly include the prefix."
                 "Each suggestion must strictly be a single sentence."
+                "Return only the suggestions, without any explanation or formatting, in separate lines."
             ),
         },
         {
