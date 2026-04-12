@@ -15,6 +15,7 @@ export default function Composer({ disabled, onSend, onAutocomplete }: Props) {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [focused, setFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const prefix = input.trim();
@@ -55,9 +56,18 @@ export default function Composer({ disabled, onSend, onAutocomplete }: Props) {
           ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onFocus={() => setFocused(true)}
+          onFocus={() => {
+            if (blurTimeout.current) {
+              clearTimeout(blurTimeout.current);
+              blurTimeout.current = null;
+            }
+            setFocused(true);
+          }}
           onBlur={() => {
-            window.setTimeout(() => setFocused(false), 150);
+            blurTimeout.current = setTimeout(() => {
+              setFocused(false);
+              blurTimeout.current = null;
+            }, 150);
           }}
           placeholder="Ask a question about the PDF..."
           className="min-h-24 w-full resize-none rounded-2xl border border-neutral-700 bg-neutral-950 px-4 py-3 text-neutral-100 outline-none ring-0 placeholder:text-neutral-500"
