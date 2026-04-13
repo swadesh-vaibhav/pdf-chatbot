@@ -3,14 +3,17 @@ import json
 import fitz  # pymupdf
 import numpy as np
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
 from chunking import chunk_text, stable_key
 from clients import redis_client
+from config import OLLAMA_BASE
 from indexing import cosine_faiss_index, retrieve, save_index
 from ollama_client import ollama_chat, ollama_embed
 from schemas import AutocompleteRequest, ChatRequest
 import state
 import hashlib
+import requests
 
 router = APIRouter()
 
@@ -98,6 +101,55 @@ def chat(req: ChatRequest):
     redis_client.setex(cache_key, 600, answer)
     return {"answer": answer, "cached": False, "context": context_chunks}
 
+@router.post("/chat/stream")
+def chat_stream(req: ChatRequest):
+    context_chunks = retrieve(req.query, top_k=4)
+    context = "\n\n".join(
+        f"[page {c['page']}] {c['text']}" for c in context_chunks
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Answer only from the provided document context. "
+                "If the context is insufficient, say you do not know. "
+                "Cite page numbers in the answer."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Context:\n{context}\n\nQuestion:\n{req.query}",
+        },
+    ]
+
+    def stream():
+        # Send metadata first
+        yield f"data: {json.dumps({'type': 'meta', 'context': context_chunks})}\n\n"
+
+        resp = requests.post(
+            f"{OLLAMA_BASE}/chat",
+            json={
+                "model": "gemma3",
+                "messages": messages,
+                "stream": True,
+            },
+            stream=True,
+            timeout=120,
+        )
+        resp.raise_for_status()
+
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            chunk = json.loads(line.decode("utf-8"))
+            token = chunk.get("message", {}).get("content", "")
+            if token:
+                yield f"data: {json.dumps({'type': 'token', 'text': token})}\n\n"
+
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
 
 @router.post("/autocomplete")
 def autocomplete(req: AutocompleteRequest):

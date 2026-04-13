@@ -4,7 +4,7 @@ import { useState } from "react";
 import UploadPanel from "@/components/UploadPanel";
 import ChatWindow, { type ChatMessage } from "@/components/ChatWindow";
 import Composer from "@/components/Composer";
-import { askQuestion, getAutocomplete, uploadPdf } from "@/lib/api";
+import { askQuestion, getAutocomplete, streamQuestion, uploadPdf } from "@/lib/api";
 
 export default function Page() {
   const [fileName, setFileName] = useState("");
@@ -55,6 +55,55 @@ export default function Page() {
     }
   }
 
+  async function handleStreamSend(query: string) {
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: query },
+      { role: "assistant", content: "", context: [] },
+    ]);
+
+    let assistantText = "";
+    let assistantContext: any[] = [];
+
+    try {
+      await streamQuestion(
+        query,
+        (token: string) => {
+          assistantText += token;
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.role === "assistant") {
+              last.content = assistantText;
+              last.context = assistantContext;
+            }
+            return [...next];
+          });
+        },
+        (context: any[]) => {
+          assistantContext = context;
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.role === "assistant") {
+              last.context = assistantContext;
+            }
+            return [...next];
+          });
+        }
+      );
+    } catch (err) {
+      setMessages((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.role === "assistant") {
+          last.content = "Something went wrong while streaming the answer.";
+        }
+        return [...next];
+      });
+    }
+  }
+
   async function handleAutocomplete(prefix: string) {
     const data = await getAutocomplete(prefix);
     return data.suggestions ?? [];
@@ -73,7 +122,7 @@ export default function Page() {
           <ChatWindow messages={messages} sending={sending} />
           <Composer
             disabled={uploading || !fileName || sending}
-            onSend={handleSend}
+            onSend={handleStreamSend}
             onAutocomplete={handleAutocomplete}
           />
         </section>
