@@ -76,7 +76,7 @@ def cosine_faiss_index(vectors: np.ndarray) -> faiss.Index:
     return index
 
 
-def retrieve(query: str, top_k: int = 4) -> list[dict]:
+def retrieve(query: str, top_k: int = 4) -> list:
     """Find the top-k most relevant chunks for a natural-language query.
 
     Workflow:

@@ -85,6 +85,7 @@ class QAResult:
     page_recall: float
     groundedness_score: float
     found_pages: List[int]
+    failure_tags: List[str]
 
 
 @dataclass
@@ -98,6 +99,18 @@ class AutocompleteResult:
     top1_match: bool
     hit_count: int
     best_similarity: float
+    failure_tags: List[str]
+
+
+@dataclass
+class PipelineSummary:
+    """High-level pipeline status derived from tagged sample-level failures."""
+
+    status: str
+    total_samples: int
+    failed_samples: int
+    failure_rate: float
+    tag_counts: Dict[str, int]
 
 
 def read_jsonl(path: Path) -> List[Dict[str, Any]]:
@@ -241,6 +254,141 @@ def percentile(values: Sequence[float], p: float) -> float:
     return float(vals[f] + (vals[c] - vals[f]) * (k - f))
 
 
+def tag_qa_failures(
+    sample: QASample,
+    latency_ms: float,
+    keyword_score: float,
+    page_score: float,
+    grounded_score: float,
+    found_pages: Sequence[int],
+) -> List[str]:
+    """Return deterministic failure tags for one QA sample."""
+
+    tags: List[str] = []
+
+    if grounded_score < 0.55:
+        tags.append("qa_low_groundedness")
+    if keyword_score < 0.60:
+        tags.append("qa_low_keyword_recall")
+    if sample.must_reference_pages and not found_pages:
+        tags.append("qa_missing_citations")
+    if sample.must_reference_pages and page_score < 1.0:
+        tags.append("qa_missing_required_pages")
+    if latency_ms > 5000.0:
+        tags.append("qa_high_latency")
+
+    return tags
+
+
+def tag_autocomplete_failures(
+    latency_ms: float,
+    any_match: bool,
+    top1_match: bool,
+    hit_count: int,
+    best_similarity: float,
+) -> List[str]:
+    """Return deterministic failure tags for one autocomplete sample."""
+
+    tags: List[str] = []
+
+    if not any_match:
+        tags.append("ac_no_match")
+    if not top1_match:
+        tags.append("ac_top1_miss")
+    if hit_count == 0:
+        tags.append("ac_zero_hits")
+    if best_similarity < 0.55:
+        tags.append("ac_low_similarity")
+    if latency_ms > 1500.0:
+        tags.append("ac_high_latency")
+
+    return tags
+
+
+def summarize_pipeline(qa_results: List[QAResult], ac_results: List[AutocompleteResult]) -> PipelineSummary:
+    """Aggregate overall pipeline status from QA + autocomplete failure tags."""
+
+    tag_counts: Dict[str, int] = {}
+    all_samples = len(qa_results) + len(ac_results)
+    failed = 0
+
+    for result in qa_results:
+        if result.failure_tags:
+            failed += 1
+        for tag in result.failure_tags:
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+    for result in ac_results:
+        if result.failure_tags:
+            failed += 1
+        for tag in result.failure_tags:
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+    failure_rate = (failed / all_samples) if all_samples else 0.0
+    status = "FAIL" if failed > 0 else "PASS"
+
+    return PipelineSummary(
+        status=status,
+        total_samples=all_samples,
+        failed_samples=failed,
+        failure_rate=failure_rate,
+        tag_counts=dict(sorted(tag_counts.items())),
+    )
+
+
+def build_pipeline_output(
+    qa_results: List[QAResult],
+    ac_results: List[AutocompleteResult],
+    qa_summary: Dict[str, Any],
+    ac_summary: Dict[str, Any],
+    pipeline_summary: PipelineSummary,
+) -> Dict[str, Any]:
+    """Build machine-readable output for CI pipelines."""
+
+    failed_qa = [
+        {
+            "question": r.question,
+            "failure_tags": r.failure_tags,
+            "latency_ms": r.latency_ms,
+            "groundedness_score": r.groundedness_score,
+            "keyword_recall": r.keyword_recall,
+            "page_recall": r.page_recall,
+        }
+        for r in qa_results
+        if r.failure_tags
+    ]
+    failed_ac = [
+        {
+            "prefix": r.prefix,
+            "failure_tags": r.failure_tags,
+            "latency_ms": r.latency_ms,
+            "any_match": r.any_match,
+            "top1_match": r.top1_match,
+            "hit_count": r.hit_count,
+            "best_similarity": r.best_similarity,
+        }
+        for r in ac_results
+        if r.failure_tags
+    ]
+
+    return {
+        "pipeline": asdict(pipeline_summary),
+        "qa_summary": qa_summary,
+        "autocomplete_summary": ac_summary,
+        "failed_examples": {
+            "qa": failed_qa,
+            "autocomplete": failed_ac,
+        },
+    }
+
+
+def write_pipeline_output(path: Path, payload: Dict[str, Any]) -> None:
+    """Write machine-readable pipeline results JSON."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
 def summarize_qa(results: List[QAResult]) -> Dict[str, Any]:
     """Aggregate QA metrics across all evaluated QA samples.
 
@@ -321,6 +469,7 @@ def run_qa_eval(backend: str, samples: List[QASample]) -> List[QAResult]:
         kw = keyword_recall(answer, sample.expected_keywords)
         pg = page_recall(found_pages, sample.must_reference_pages)
         grounded = groundedness_score(answer, sample.expected_keywords, found_pages, sample.must_reference_pages)
+        failure_tags = tag_qa_failures(sample, latency_ms, kw, pg, grounded, found_pages)
 
         results.append(
             QAResult(
@@ -331,6 +480,7 @@ def run_qa_eval(backend: str, samples: List[QASample]) -> List[QAResult]:
                 page_recall=pg,
                 groundedness_score=grounded,
                 found_pages=found_pages,
+                failure_tags=failure_tags,
             )
         )
 
@@ -357,6 +507,13 @@ def run_autocomplete_eval(backend: str, samples: List[AutocompleteSample]) -> Li
 
         suggestions = [str(s) for s in payload.get("suggestions", []) if str(s).strip()]
         score = autocomplete_match(suggestions, sample.expected_suggestions)
+        failure_tags = tag_autocomplete_failures(
+            latency_ms=latency_ms,
+            any_match=score.any_match,
+            top1_match=score.top1_match,
+            hit_count=score.hit_count,
+            best_similarity=score.best_similarity,
+        )
 
         results.append(
             AutocompleteResult(
@@ -367,6 +524,7 @@ def run_autocomplete_eval(backend: str, samples: List[AutocompleteSample]) -> Li
                 top1_match=score.top1_match,
                 hit_count=score.hit_count,
                 best_similarity=score.best_similarity,
+                failure_tags=failure_tags,
             )
         )
 
@@ -382,6 +540,7 @@ def write_report(
     ac_results: List[AutocompleteResult],
     qa_summary: Dict[str, Any],
     ac_summary: Dict[str, Any],
+    pipeline_summary: PipelineSummary,
 ) -> None:
     """Write a markdown report including summaries, failures, and raw JSON.
 
@@ -394,6 +553,7 @@ def write_report(
         ac_results: Per-sample autocomplete results.
         qa_summary: Aggregate QA summary metrics.
         ac_summary: Aggregate autocomplete summary metrics.
+        pipeline_summary: Overall tagged pass/fail summary for CI pipelines.
 
     Returns:
         `None`. The report is written to `out_path`.
@@ -413,6 +573,14 @@ def write_report(
 
     lines.append("## Summary")
     lines.append("")
+    lines.append("### Pipeline")
+    lines.append(f"- Status: **{pipeline_summary.status}**")
+    lines.append(f"- Total samples: {pipeline_summary.total_samples}")
+    lines.append(f"- Failed samples: {pipeline_summary.failed_samples}")
+    lines.append(f"- Failure rate: {pipeline_summary.failure_rate * 100:.1f}%")
+    lines.append(f"- Failure tags: {pipeline_summary.tag_counts}")
+    lines.append("")
+
     lines.append("### Question Answering")
     lines.append(f"- Samples: {qa_summary['count']}")
     lines.append(f"- Avg groundedness: {qa_summary['avg_groundedness']:.3f}")
@@ -436,6 +604,7 @@ def write_report(
     lines.append("### Worst QA examples")
     for r in bad_qa:
         lines.append(f"- Q: {r.question}")
+        lines.append(f"  - Failure tags: {r.failure_tags}")
         lines.append(f"  - Groundedness: {r.groundedness_score:.3f}")
         lines.append(f"  - Keyword recall: {r.keyword_recall:.3f}")
         lines.append(f"  - Page recall: {r.page_recall:.3f}")
@@ -446,6 +615,7 @@ def write_report(
     lines.append("### Worst autocomplete examples")
     for r in bad_ac:
         lines.append(f"- Prefix: {r.prefix}")
+        lines.append(f"  - Failure tags: {r.failure_tags}")
         lines.append(f"  - Any-match: {r.any_match}")
         lines.append(f"  - Top-1 match: {r.top1_match}")
         lines.append(f"  - Hit count: {r.hit_count}")
@@ -459,6 +629,7 @@ def write_report(
     lines.append("```json")
     lines.append(json.dumps(
         {
+            "pipeline": asdict(pipeline_summary),
             "qa_summary": qa_summary,
             "autocomplete_summary": ac_summary,
             "qa_results": [asdict(r) for r in qa_results],
@@ -487,6 +658,12 @@ def main() -> int:
     parser.add_argument("--autocomplete", type=Path, required=True, help="Path to autocomplete_dataset.jsonl.")
     parser.add_argument("--backend", type=str, default="http://127.0.0.1:8000", help="Backend base URL.")
     parser.add_argument("--out", type=Path, default=Path(f"reports/eval_report_{now}.md"), help="Output markdown report.")
+    parser.add_argument(
+        "--pipeline-out",
+        type=Path,
+        default=None,
+        help="Optional path for machine-readable pipeline JSON output.",
+    )
     parser.add_argument("--skip-upload", action="store_true", help="Skip uploading the PDF first.")
     args = parser.parse_args()
 
@@ -520,6 +697,20 @@ def main() -> int:
 
     qa_summary = summarize_qa(qa_results)
     ac_summary = summarize_autocomplete(ac_results)
+    pipeline_summary = summarize_pipeline(qa_results, ac_results)
+
+    pipeline_out = args.pipeline_out
+    if pipeline_out is None:
+        pipeline_out = args.out.with_name(f"{args.out.stem}_pipeline.json")
+
+    pipeline_payload = build_pipeline_output(
+        qa_results=qa_results,
+        ac_results=ac_results,
+        qa_summary=qa_summary,
+        ac_summary=ac_summary,
+        pipeline_summary=pipeline_summary,
+    )
+    write_pipeline_output(pipeline_out, pipeline_payload)
 
     write_report(
         out_path=args.out,
@@ -530,9 +721,14 @@ def main() -> int:
         ac_results=ac_results,
         qa_summary=qa_summary,
         ac_summary=ac_summary,
+        pipeline_summary=pipeline_summary,
     )
 
     print(f"Wrote report to: {args.out}")
+    print(f"Wrote pipeline output to: {pipeline_out}")
+    print(f"PIPELINE_STATUS={pipeline_summary.status}")
+    print(f"PIPELINE_FAILED_SAMPLES={pipeline_summary.failed_samples}")
+    print(f"PIPELINE_TOTAL_SAMPLES={pipeline_summary.total_samples}")
     print("QA summary:", qa_summary)
     print("Autocomplete summary:", ac_summary)
     return 0

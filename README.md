@@ -1,4 +1,4 @@
-# 📄 PDF Chatbot with Context-Aware Autocomplete
+# PDF Chatbot with Context-Aware Autocomplete
 
 A **retrieval-augmented generation (RAG) system** that enables users to:
 - Ask questions over PDF documents
@@ -7,19 +7,24 @@ A **retrieval-augmented generation (RAG) system** that enables users to:
 
 ---
 
-## 🚀 Features
+## Features
 
-### 🔍 Document Q&A (RAG)
+### Document Q&A (RAG)
 - Semantic search over PDF content using embeddings
 - Context-aware answer generation
 - Page-level citation extraction
 
-### ⚡ Context-Aware Autocomplete (Key Differentiator)
+### Context-Aware Autocomplete
 - Suggests query completions grounded in document content
 - Improves query formulation and retrieval quality
 - Low-latency suggestions using caching
 
-### ⚙️ Production-Oriented Design
+### Streaming Responses
+- Real-time token streaming for low-latency user feedback
+- Server-Sent Events (SSE) with context metadata
+- Graceful handling of partial UTF-8 chunks
+
+### Production-Oriented Design
 - FastAPI backend
 - Redis caching layer
 - Vector search (FAISS)
@@ -27,13 +32,13 @@ A **retrieval-augmented generation (RAG) system** that enables users to:
 
 ---
 
-## 🧠 System Architecture
+## System Design
 
 User → Frontend → Backend → Redis → Vector DB → LLM
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 .
@@ -50,7 +55,7 @@ User → Frontend → Backend → Redis → Vector DB → LLM
 
 ---
 
-## 🛠️ Setup
+## Setup
 
 ### Backend
 ```
@@ -76,7 +81,7 @@ ollama run gemma3
 
 ---
 
-## 📊 Evaluation
+## Evaluation
 
 Run (macOS/Linux):
 ```
@@ -88,6 +93,17 @@ Run (macOS/Linux):
     --out eval_report.md
 ```
 
+Optional machine-readable pipeline output:
+```
+  python run_eval.py \
+    --pdf data/sample_policy.pdf \
+    --qa data/qa_dataset.jsonl \
+    --autocomplete data/autocomplete_dataset.jsonl \
+    --backend http://127.0.0.1:8000 \
+    --out eval_report.md \
+    --pipeline-out eval_pipeline.json
+```
+
 Run (Windows):
 ```
   python run_eval.py ^
@@ -95,21 +111,24 @@ Run (Windows):
     --qa data\qa_dataset.jsonl ^
     --autocomplete data\autocomplete_dataset.jsonl ^
     --backend http://127.0.0.1:8000 ^
-    --out eval_report.md
+    --out eval_report.md ^
+    --pipeline-out eval_pipeline.json
 ```
 
 ---
 
-## 📈 Metrics
+## Metrics
 
 - Keyword Recall
 - Page Recall
 - Groundedness Score
 - Autocomplete Match Rate
+- Auto-tagged failures (QA + autocomplete)
+- Pipeline pass/fail summary JSON
 
 ---
 
-## 🔬 Learnings
+## Learnings
 
 - Retrieval quality is the main bottleneck
 - Autocomplete improves query formulation
@@ -117,21 +136,15 @@ Run (Windows):
 
 ---
 
-## 🔮 Future Work
+## Future Work
 
 - Hybrid search (BM25 + vector)
 - Re-ranking
 - LLM-as-judge
-- Streaming responses
+- Multi-document indexing
 
 ---
 
-## 🎯 Positioning
+## Positioning
 
 This is a **retrieval-augmented system with evaluation, caching, and query assistance**, not just a chatbot.
-
----
-
-## 🧑‍💻 Author
-
-Built as a hands-on ML systems project focusing on RAG, evaluation, and system design.
