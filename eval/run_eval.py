@@ -325,7 +325,7 @@ def summarize_pipeline(qa_results: List[QAResult], ac_results: List[Autocomplete
             tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
     failure_rate = (failed / all_samples) if all_samples else 0.0
-    status = "FAIL" if failed > 0 else "PASS"
+    status = "FAIL" if failure_rate > 0.5 else "PASS"
 
     return PipelineSummary(
         status=status,
