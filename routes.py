@@ -7,7 +7,13 @@ from fastapi.responses import StreamingResponse
 
 from chunking import chunk_text, stable_key
 from clients import redis_client
-from config import OLLAMA_BASE
+from config import (
+    AUTOCOMPLETE_TOP_K,
+    CHAT_TOP_K,
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
+    OLLAMA_BASE,
+)
 from indexing import cosine_faiss_index, retrieve, save_index
 from ollama_client import ollama_chat, ollama_embed
 from schemas import AutocompleteRequest, ChatRequest
@@ -43,7 +49,7 @@ async def upload_pdf(file: UploadFile = File(...)):
 
     all_chunks = []
     for page_num, text in extracted:
-        for c in chunk_text(text):
+        for c in chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
             all_chunks.append(
                 {
                     "page": page_num,
@@ -77,7 +83,7 @@ def chat(req: ChatRequest):
     if cached:
         return {"answer": cached, "cached": True, "context": []}
 
-    context_chunks = retrieve(req.query, top_k=4)
+    context_chunks = retrieve(req.query, top_k=CHAT_TOP_K)
     context = "\n\n".join(
         f"[page {c['page']}] {c['text']}" for c in context_chunks
     )
@@ -103,7 +109,7 @@ def chat(req: ChatRequest):
 
 @router.post("/chat/stream")
 def chat_stream(req: ChatRequest):
-    context_chunks = retrieve(req.query, top_k=4)
+    context_chunks = retrieve(req.query, top_k=CHAT_TOP_K)
     context = "\n\n".join(
         f"[page {c['page']}] {c['text']}" for c in context_chunks
     )
@@ -158,7 +164,7 @@ def autocomplete(req: AutocompleteRequest):
     if cached:
         return {"suggestions": json.loads(cached), "cached": True}
 
-    context_chunks = retrieve(req.prefix, top_k=3)
+    context_chunks = retrieve(req.prefix, top_k=AUTOCOMPLETE_TOP_K)
     context = "\n\n".join(
         f"[page {c['page']}] {c['text']}" for c in context_chunks
     )
