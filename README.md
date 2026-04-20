@@ -264,9 +264,3 @@ Run (Windows):
 - Re-ranking
 - LLM-as-judge
 - Multi-document indexing
-
----
-
-## Positioning
-
-This is a **retrieval-augmented system with evaluation, caching, and query assistance**, not just a chatbot.
