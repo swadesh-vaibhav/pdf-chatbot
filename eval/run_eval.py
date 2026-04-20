@@ -198,6 +198,17 @@ def post_json(url: str, payload: Dict[str, Any], timeout: float = 120.0) -> Dict
     return resp.json()
 
 
+def fetch_config(backend: str) -> Dict[str, Any]:
+    """Fetch current model and retrieval config from the backend `/config` endpoint."""
+    try:
+        resp = requests.get(f"{backend}/config", timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as exc:
+        print(f"Warning: could not fetch /config ({exc}). Config will be omitted from report.", file=sys.stderr)
+        return {}
+
+
 def upload_pdf(backend: str, pdf_path: Path) -> Dict[str, Any]:
     """Upload the reference PDF to the backend `/upload` endpoint.
 
@@ -342,6 +353,7 @@ def build_pipeline_output(
     qa_summary: Dict[str, Any],
     ac_summary: Dict[str, Any],
     pipeline_summary: PipelineSummary,
+    backend_config: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Build machine-readable output for CI pipelines."""
 
@@ -371,7 +383,7 @@ def build_pipeline_output(
         if r.failure_tags
     ]
 
-    return {
+    out: Dict[str, Any] = {
         "pipeline": asdict(pipeline_summary),
         "qa_summary": qa_summary,
         "autocomplete_summary": ac_summary,
@@ -380,6 +392,9 @@ def build_pipeline_output(
             "autocomplete": failed_ac,
         },
     }
+    if backend_config:
+        out["config"] = backend_config
+    return out
 
 
 def write_pipeline_output(path: Path, payload: Dict[str, Any]) -> None:
@@ -541,6 +556,7 @@ def write_report(
     qa_summary: Dict[str, Any],
     ac_summary: Dict[str, Any],
     pipeline_summary: PipelineSummary,
+    backend_config: Dict[str, Any] | None = None,
 ) -> None:
     """Write a markdown report including summaries, failures, and raw JSON.
 
@@ -570,6 +586,15 @@ def write_report(
     lines.append(f"- QA dataset: `{qa_path}`")
     lines.append(f"- Autocomplete dataset: `{autocomplete_path}`")
     lines.append("")
+
+    if backend_config:
+        lines.append("## Config")
+        lines.append("")
+        lines.append(f"| Key | Value |")
+        lines.append(f"|-----|-------|")
+        for k, v in backend_config.items():
+            lines.append(f"| `{k}` | `{v}` |")
+        lines.append("")
 
     lines.append("## Summary")
     lines.append("")
@@ -627,17 +652,16 @@ def write_report(
     lines.append("## Raw JSON")
     lines.append("")
     lines.append("```json")
-    lines.append(json.dumps(
-        {
-            "pipeline": asdict(pipeline_summary),
-            "qa_summary": qa_summary,
-            "autocomplete_summary": ac_summary,
-            "qa_results": [asdict(r) for r in qa_results],
-            "autocomplete_results": [asdict(r) for r in ac_results],
-        },
-        indent=2,
-        ensure_ascii=False,
-    ))
+    raw: Dict[str, Any] = {
+        "pipeline": asdict(pipeline_summary),
+        "qa_summary": qa_summary,
+        "autocomplete_summary": ac_summary,
+        "qa_results": [asdict(r) for r in qa_results],
+        "autocomplete_results": [asdict(r) for r in ac_results],
+    }
+    if backend_config:
+        raw["config"] = backend_config
+    lines.append(json.dumps(raw, indent=2, ensure_ascii=False))
     lines.append("```")
     lines.append("")
 
@@ -678,6 +702,7 @@ def main() -> int:
         return 2
 
     backend = args.backend.rstrip("/")
+    backend_config = fetch_config(backend)
 
     if not args.skip_upload:
         print(f"Uploading PDF: {args.pdf}")
@@ -709,6 +734,7 @@ def main() -> int:
         qa_summary=qa_summary,
         ac_summary=ac_summary,
         pipeline_summary=pipeline_summary,
+        backend_config=backend_config,
     )
     write_pipeline_output(pipeline_out, pipeline_payload)
 
@@ -722,6 +748,7 @@ def main() -> int:
         qa_summary=qa_summary,
         ac_summary=ac_summary,
         pipeline_summary=pipeline_summary,
+        backend_config=backend_config,
     )
 
     print(f"Wrote report to: {args.out}")

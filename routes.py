@@ -268,6 +268,32 @@ def autocomplete(req: AutocompleteRequest):
     return {"suggestions": suggestions, "cached": False}
 
 
+@router.get("/config")
+def config_snapshot():
+    from config import (
+        AUTOCOMPLETE_TOP_K,
+        CHAT_MODEL,
+        CHAT_PROVIDER,
+        CHAT_TOP_K,
+        CHUNK_OVERLAP,
+        CHUNK_SIZE,
+        EMBED_MODEL,
+        EMBED_PROVIDER,
+        VECTOR_DB,
+    )
+    return {
+        "chat_provider": CHAT_PROVIDER,
+        "chat_model": CHAT_MODEL,
+        "embed_provider": EMBED_PROVIDER,
+        "embed_model": EMBED_MODEL,
+        "vector_db": VECTOR_DB,
+        "chunk_size": CHUNK_SIZE,
+        "chunk_overlap": CHUNK_OVERLAP,
+        "chat_top_k": CHAT_TOP_K,
+        "autocomplete_top_k": AUTOCOMPLETE_TOP_K,
+    }
+
+
 @router.get("/metrics")
 def metrics():
     return analytics.snapshot()

@@ -211,8 +211,7 @@ Run (macOS/Linux):
     --pdf data/sample_policy.pdf \
     --qa data/qa_dataset.jsonl \
     --autocomplete data/autocomplete_dataset.jsonl \
-    --backend http://127.0.0.1:8000 \
-    --out eval_report.md
+    --backend http://127.0.0.1:8000
 ```
 
 Optional machine-readable pipeline output:
