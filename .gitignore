@@ -13,3 +13,4 @@
 **/.vscode
 **/.egg-info
 data/**
+logs/

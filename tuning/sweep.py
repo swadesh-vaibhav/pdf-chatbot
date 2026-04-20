@@ -64,9 +64,9 @@ for _p in (str(ROOT), str(EVAL_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from chunking import chunk_text  # noqa: E402
-from ollama_client import ollama_chat, ollama_embed  # noqa: E402
-from metrics import (  # noqa: E402
+from chunking import chunk_text
+from ollama_client import ollama_chat, ollama_embed
+from eval.metrics import (
     autocomplete_match,
     extract_pages_from_text,
     groundedness_score,

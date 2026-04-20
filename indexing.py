@@ -9,15 +9,20 @@ Responsibilities:
 """
 
 import json
+import time
 
 import faiss
 import numpy as np
 
+import analytics
 from chunking import stable_key
 from clients import redis_client
 from config import CHUNKS_PATH, INDEX_PATH
+from logger import get_logger
 import state
 from ollama_client import ollama_embed
+
+log = get_logger("indexing")
 
 
 def build_index():
@@ -29,30 +34,29 @@ def build_index():
     "no index yet" case gracefully.
     """
     if not INDEX_PATH.exists() or not CHUNKS_PATH.exists():
-        # No persisted data yet — start with an empty index.
         state.faiss_index = None
         state.chunks = []
         state.embedding_dim = None
+        log.info("index.build_skip", extra={"reason": "no persisted index found"})
         return
 
     state.faiss_index = faiss.read_index(str(INDEX_PATH))
     with open(CHUNKS_PATH, "r", encoding="utf-8") as f:
         state.chunks = json.load(f)
-    # Cache the embedding dimension so callers don't need to inspect the index.
     state.embedding_dim = state.faiss_index.d
+    log.info(
+        "index.loaded",
+        extra={"n_chunks": len(state.chunks), "embedding_dim": state.embedding_dim},
+    )
 
 
 def save_index():
-    """Persist the current in-memory FAISS index and chunk list to disk.
-
-    Called after ingesting a new PDF so that the index survives restarts.
-    The FAISS index is only written when it exists; the chunks file is always
-    written (to an empty list if needed) to keep the two files in sync.
-    """
+    """Persist the current in-memory FAISS index and chunk list to disk."""
     if state.faiss_index is not None:
         faiss.write_index(state.faiss_index, str(INDEX_PATH))
     with open(CHUNKS_PATH, "w", encoding="utf-8") as f:
         json.dump(state.chunks, f, ensure_ascii=False)
+    log.debug("index.saved", extra={"n_chunks": len(state.chunks)})
 
 
 def cosine_faiss_index(vectors: np.ndarray) -> faiss.Index:
@@ -69,7 +73,6 @@ def cosine_faiss_index(vectors: np.ndarray) -> faiss.Index:
     Returns:
         A populated faiss.IndexFlatIP ready for search.
     """
-    # Normalise in-place so inner product equals cosine similarity.
     faiss.normalize_L2(vectors)
     index = faiss.IndexFlatIP(vectors.shape[1])
     index.add(vectors)
@@ -96,26 +99,37 @@ def retrieve(query: str, top_k: int = 4) -> list:
     if state.faiss_index is None or not state.chunks:
         return []
 
-    # Redis cache key is deterministic for identical queries.
     q_key = f"retrieval:{stable_key(query)}"
     cached = redis_client.get(q_key)
     if cached:
+        analytics.record_cache_hit("retrieval")
+        log.debug("retrieval.cache_hit", extra={"query_len": len(query), "top_k": top_k})
         return json.loads(cached)
 
-    # Embed and normalise the query vector to match the index's cosine metric.
-    q_vec = np.array(ollama_embed([query]), dtype="float32")
+    analytics.record_cache_miss("retrieval")
 
-    # Normalise in-place so inner product equals cosine similarity.
+    q_vec = np.array(ollama_embed([query]), dtype="float32")
     faiss.normalize_L2(q_vec)
 
-    # FAISS returns parallel arrays of scores and indexes; -1 means "no result".
-    scores, ids = state.faiss_index.search(q_vec, top_k)
+    t0 = time.perf_counter()
+    _, ids = state.faiss_index.search(q_vec, top_k)
+    faiss_ms = (time.perf_counter() - t0) * 1000
+    analytics.record_faiss_search(faiss_ms)
+
     results = []
     for idx in ids[0]:
         if idx == -1:
             continue
         results.append(state.chunks[idx])
 
-    # Cache for 5 minutes to reduce Ollama embedding latency on repeated queries.
     redis_client.setex(q_key, 300, json.dumps(results))
+    log.debug(
+        "retrieval.complete",
+        extra={
+            "query_len": len(query),
+            "top_k": top_k,
+            "n_results": len(results),
+            "faiss_latency_ms": round(faiss_ms, 2),
+        },
+    )
     return results
