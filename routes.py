@@ -11,6 +11,7 @@ from chunking import chunk_text, stable_key
 from clients import redis_client
 from config import (
     AUTOCOMPLETE_TOP_K,
+    CHAT_MODEL,
     CHAT_TOP_K,
     CHUNK_OVERLAP,
     CHUNK_SIZE,
@@ -187,7 +188,7 @@ def chat_stream(req: ChatRequest):
 
         resp = requests.post(
             f"{OLLAMA_BASE}/chat",
-            json={"model": "gemma3", "messages": messages, "stream": True},
+            json={"model": CHAT_MODEL, "messages": messages, "stream": True},
             stream=True,
             timeout=120,
         )

@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import analytics
 from indexing import build_index
 from logger import configure_logging, get_logger, new_request_id, set_request_id
+from model_guard import check_and_apply_model_changes
 from routes import router
 
 configure_logging(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -71,5 +72,6 @@ app.add_middleware(
 
 app.include_router(router)
 
+check_and_apply_model_changes()
 build_index()
 log.info("app.startup: PDF chatbot backend ready")

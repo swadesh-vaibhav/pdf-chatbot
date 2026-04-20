@@ -3,7 +3,7 @@ import time
 import requests
 
 import analytics
-from config import OLLAMA_BASE
+from config import CHAT_MODEL, EMBED_MODEL, OLLAMA_BASE
 from logger import get_logger
 
 log = get_logger("ollama_client")
@@ -14,7 +14,7 @@ def ollama_embed(texts):
     try:
         resp = requests.post(
             f"{OLLAMA_BASE}/embed",
-            json={"model": "embeddinggemma", "input": texts},
+            json={"model": EMBED_MODEL, "input": texts},
             timeout=120,
         )
         resp.raise_for_status()
@@ -23,7 +23,7 @@ def ollama_embed(texts):
         analytics.record_embed_call(len(texts), latency_ms, success=True)
         log.debug(
             "ollama.embed",
-            extra={"n_texts": len(texts), "latency_ms": round(latency_ms, 2)},
+            extra={"model": EMBED_MODEL, "n_texts": len(texts), "latency_ms": round(latency_ms, 2)},
         )
         return embeddings
     except Exception:
@@ -31,7 +31,7 @@ def ollama_embed(texts):
         analytics.record_embed_call(len(texts), latency_ms, success=False)
         log.exception(
             "ollama.embed_error",
-            extra={"n_texts": len(texts), "latency_ms": round(latency_ms, 2)},
+            extra={"model": EMBED_MODEL, "n_texts": len(texts), "latency_ms": round(latency_ms, 2)},
         )
         raise
 
@@ -41,7 +41,7 @@ def ollama_chat(messages):
     try:
         resp = requests.post(
             f"{OLLAMA_BASE}/chat",
-            json={"model": "gemma3", "messages": messages, "stream": False},
+            json={"model": CHAT_MODEL, "messages": messages, "stream": False},
             timeout=120,
         )
         resp.raise_for_status()
@@ -51,7 +51,7 @@ def ollama_chat(messages):
         log.info(
             "ollama.chat",
             extra={
-                "model": "gemma3",
+                "model": CHAT_MODEL,
                 "n_messages": len(messages),
                 "response_len": len(content),
                 "latency_ms": round(latency_ms, 2),
@@ -63,6 +63,6 @@ def ollama_chat(messages):
         analytics.record_llm_call(latency_ms, success=False)
         log.exception(
             "ollama.chat_error",
-            extra={"model": "gemma3", "latency_ms": round(latency_ms, 2)},
+            extra={"model": CHAT_MODEL, "latency_ms": round(latency_ms, 2)},
         )
         raise
